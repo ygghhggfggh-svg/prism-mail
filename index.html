@@ -116,9 +116,8 @@
         </div>
     </div>
 
-    <!-- JAVASCRIPT (SUPABASE CONNECTED) -->
+    <!-- JAVASCRIPT (SUPABASE CONNECTED & FETCHING) -->
     <script>
-        // Supabase Configuration Configured
         const SUPABASE_URL = 'https://ljimfdxkxwlmrnesvzxn.supabase.com';
         const SUPABASE_KEY = 'sb_publishable_sEmO7CKvOrbg3OjjEUPP6Q_CLag6_dq';
         
@@ -207,11 +206,43 @@
             loadUserData();
         }
 
-        function loadUserData() {
+        async function loadUserData() {
             if(!db.currentUser) return;
             const seed = db.avatars[db.currentUser] || db.currentUser;
             document.getElementById('userDP').src = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}`;
+            
+            // Fetch mails from Supabase server for current user
+            await fetchServerMails();
             renderEmails();
+        }
+
+        async function fetchServerMails() {
+            try {
+                const { data, error } = await _supabase
+                    .from('prism_mails')
+                    .select('*')
+                    .eq('recipient', db.currentUser);
+
+                if(!error && data) {
+                    if(!db.emails[db.currentUser]) db.emails[db.currentUser] = { inbox: [], sent: [] };
+                    
+                    data.forEach(serverMail => {
+                        const exists = db.emails[db.currentUser].inbox.some(
+                            m => m.sender === serverMail.sender && m.subject === serverMail.subject && m.body === serverMail.body
+                        );
+                        if(!exists) {
+                            db.emails[db.currentUser].inbox.unshift({
+                                sender: serverMail.sender,
+                                subject: serverMail.subject,
+                                body: serverMail.body
+                            });
+                        }
+                    });
+                    saveDB();
+                }
+            } catch(err) {
+                console.log("Fetch error:", err);
+            }
         }
 
         function updateDP() {
@@ -231,25 +262,21 @@
 
             if(!recipient || !subject || !body) return alert("Please fill all fields!");
             
-            // Sync to Supabase Server Database
+            // Save to Supabase server database
             try {
                 const { error } = await _supabase
                     .from('prism_mails')
                     .insert([{ sender: db.currentUser, recipient: recipient, subject: subject, body: body }]);
                 
-                if(error) console.log("Server Sync Error:", error.message);
+                if(error) {
+                    console.log("Server Sync Error:", error.message);
+                    alert("Warning: Mail sent locally, but server sync failed check Supabase table!");
+                }
             } catch(err) {
                 console.log("Network error", err);
             }
 
-            if(!db.emails[recipient]) db.emails[recipient] = { inbox: [], sent: [] };
-            db.emails[recipient].inbox.unshift({
-                sender: db.currentUser,
-                subject: subject,
-                body: body
-            });
-
-            if(!db.emails[db.currentUser].sent) db.emails[db.currentUser].sent = [];
+            if(!db.emails[db.currentUser]) db.emails[db.currentUser] = { inbox: [], sent: [] };
             db.emails[db.currentUser].sent.unshift({
                 sender: "To: " + recipient,
                 subject: subject,
@@ -347,5 +374,4 @@
         }
     </script>
 </body>
-      </html>
-              
+</html>
