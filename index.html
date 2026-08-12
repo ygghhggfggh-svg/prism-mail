@@ -1,1 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prism Mail</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #07090e; color: #e2e8f0; }
+        .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(99, 102, 241, 0.2); }
+    </style>
+</head>
+<body class="h-screen flex flex-col justify-between overflow-hidden">
 
+    <!-- AUTH SCREEN -->
+    <div id="authModal" class="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4">
+        <div class="glass max-w-sm w-full p-6 rounded-3xl space-y-4 shadow-2xl">
+            <div class="text-center">
+                <h2 class="text-xl font-black text-indigo-400">PRISM MAIL</h2>
+                <p id="authTitle" class="text-xs text-gray-400 mt-1">Create your secure account</p>
+            </div>
+
+            <div id="formStep" class="space-y-3 text-xs">
+                <input type="text" id="username" placeholder="Username (e.g. user@prism)" class="w-full bg-gray-900 border border-gray-800 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
+                <input type="password" id="password" placeholder="Password" class="w-full bg-gray-900 border border-gray-800 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
+                <button onclick="handleAuth()" id="authBtn" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg">Create Account</button>
+                <p onclick="toggleAuthMode()" class="text-center text-indigo-400 cursor-pointer pt-1" id="switchText">Already have an account? Login</p>
+            </div>
+
+            <div id="otpStep" class="space-y-3 text-xs hidden">
+                <div class="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-300">
+                    📬 Security Check: OTP sent to your <strong>Prism Mail Inbox</strong>.
+                </div>
+                <input type="text" id="otpInput" placeholder="Enter OTP from Inbox" class="w-full bg-gray-900 border border-gray-800 rounded-xl p-3 text-white text-center tracking-widest font-bold">
+                <button onclick="verifyLoginOTP()" class="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl">Verify & Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOP HEADER -->
+    <header class="p-4 z-30 space-y-2">
+        <div class="glass rounded-full px-4 py-2 flex items-center justify-between shadow-xl">
+            <div class="flex items-center space-x-2">
+                <span class="font-black text-indigo-400">PRISM</span>
+            </div>
+            
+            <div class="flex-1 max-w-xs mx-3">
+                <input type="text" id="searchInput" oninput="searchMails()" placeholder="Search mail..." class="w-full bg-gray-900/80 border border-gray-800 rounded-full px-4 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+
+            <div class="flex items-center space-x-2 relative">
+                <img id="userDP" onclick="toggleMenu()" src="https://api.dicebear.com/7.x/bottts/svg?seed=User" class="w-8 h-8 rounded-full border border-indigo-500 cursor-pointer object-cover">
+                
+                <div id="menu" class="hidden absolute right-0 top-10 w-56 glass rounded-2xl p-2 z-50 text-xs space-y-1">
+                    <button onclick="switchTab('inbox')" class="w-full text-left p-2.5 hover:bg-gray-800 rounded-xl text-indigo-300 font-bold">📬 Inbox</button>
+                    <button onclick="switchTab('sent')" class="w-full text-left p-2.5 hover:bg-gray-800 rounded-xl text-gray-200">🚀 Sent</button>
+                    <button onclick="openModal('composeModal')" class="w-full text-left p-2.5 hover:bg-gray-800 rounded-xl text-green-400 font-bold">✍️ Compose Mail</button>
+                    <button onclick="openModal('dpModal')" class="w-full text-left p-2.5 hover:bg-gray-800 rounded-xl text-purple-300">🖼️ Change Profile DP</button>
+                    <div class="border-t border-gray-800 my-1"></div>
+                    <button onclick="openModal('devicesModal')" class="w-full text-left p-2.5 hover:bg-gray-800 rounded-xl text-gray-300">📱 Active Devices</button>
+                    <button onclick="logout()" class="w-full text-left p-2.5 text-red-400 font-bold">Logout</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 px-4 overflow-y-auto space-y-2 pb-20">
+        <h2 id="viewTitle" class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2">Primary Inbox</h2>
+        <div id="emailList" class="space-y-2"></div>
+    </main>
+
+    <!-- COMPOSE MODAL -->
+    <div id="composeModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="glass max-w-sm w-full p-5 rounded-2xl space-y-3 text-xs">
+            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                <h3 class="font-bold text-indigo-400 text-sm">New Message</h3>
+                <button onclick="closeModal('composeModal')" class="text-gray-400 text-sm">✕</button>
+            </div>
+            <input type="text" id="recipientUser" placeholder="To (Username / Email)" class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-white">
+            <input type="text" id="mailSubject" placeholder="Subject" class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-white">
+            <textarea id="mailBody" rows="4" placeholder="Write message..." class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-white"></textarea>
+            <button onclick="sendMail()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl">Send Mail</button>
+        </div>
+    </div>
+
+    <!-- CHANGE DP MODAL -->
+    <div id="dpModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="glass max-w-xs w-full p-4 rounded-2xl space-y-3 text-xs text-center">
+            <h3 class="font-bold text-white">Change Profile Avatar Seed</h3>
+            <input type="text" id="dpSeedInput" placeholder="Enter avatar name..." class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-white text-center">
+            <button onclick="updateDP()" class="w-full py-2 bg-purple-600 text-white font-bold rounded-xl">Update DP</button>
+            <button onclick="closeModal('dpModal')" class="w-full py-1.5 bg-gray-800 rounded-xl">Cancel</button>
+        </div>
+    </div>
+
+    <!-- EMAIL READER MODAL -->
+    <div id="readModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="glass max-w-md w-full p-5 rounded-2xl space-y-3 text-xs">
+            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                <h3 id="readSender" class="font-bold text-indigo-400 text-sm"></h3>
+                <button onclick="closeModal('readModal')" class="text-gray-400 text-sm">✕</button>
+            </div>
+            <p id="readSubject" class="font-bold text-white text-sm"></p>
+            <p id="readBody" class="text-gray-300 leading-relaxed"></p>
+        </div>
+    </div>
+
+    <!-- ACTIVE DEVICES MODAL -->
+    <div id="devicesModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="glass max-w-xs w-full p-4 rounded-2xl space-y-2 text-xs">
+            <h3 class="font-bold text-white mb-2">Logged-in Devices</h3>
+            <div id="deviceList" class="space-y-1 text-gray-300"></div>
+            <button onclick="closeModal('devicesModal')" class="w-full py-2 bg-gray-800 rounded-xl mt-2">Close</button>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT (SUPABASE CONNECTED) -->
+    <script>
+        // Supabase Configuration Configured
+        const SUPABASE_URL = 'https://ljimfdxkxwlmrnesvzxn.supabase.com';
+        const SUPABASE_KEY = 'sb_publishable_sEmO7CKvOrbg3OjjEUPP6Q_CLag6_dq';
+        
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let isLoginMode = false;
+        let activeTab = 'inbox';
+        let currentOtpTarget = "";
+        let pendingUser = "";
+
+        let db = JSON.parse(localStorage.getItem('prism_mail_system')) || {
+            users: {},
+            currentUser: null,
+            avatars: {},
+            emails: {},
+            devices: []
+        };
+
+        if (db.currentUser) {
+            document.getElementById('authModal').classList.add('hidden');
+            loadUserData();
+        }
+
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            document.getElementById('authTitle').innerText = isLoginMode ? "Login to your account" : "Create your secure account";
+            document.getElementById('authBtn').innerText = isLoginMode ? "Next (Send OTP)" : "Create Account";
+            document.getElementById('switchText').innerText = isLoginMode ? "Need an account? Register" : "Already have an account? Login";
+        }
+
+        function handleAuth() {
+            const u = document.getElementById('username').value.trim().toLowerCase();
+            const p = document.getElementById('password').value.trim();
+            if(!u || !p) return alert("Enter credentials!");
+
+            if(!isLoginMode) {
+                if(db.users[u]) return alert("Username already exists!");
+                db.users[u] = p;
+                db.avatars[u] = u;
+                db.emails[u] = { 
+                    inbox: [{sender: "Prism Security", subject: "Welcome!", body: "Your secure sovereign account is active."}], 
+                    sent: [] 
+                };
+                db.currentUser = u;
+                saveDB();
+                alert("Account Created Successfully!");
+                completeLogin();
+            } else {
+                if(!db.users[u] || db.users[u] !== p) return alert("Invalid Username or Password!");
+                
+                pendingUser = u;
+                currentOtpTarget = Math.floor(1000 + Math.random() * 9000).toString();
+
+                if(!db.emails[u]) db.emails[u] = { inbox: [], sent: [] };
+                db.emails[u].inbox.unshift({
+                    sender: "Prism Authentication Service",
+                    subject: "Your Login Verification Code",
+                    body: `Hello ${u}, your login verification OTP code is: ${currentOtpTarget}.`
+                });
+                saveDB();
+
+                document.getElementById('formStep').classList.add('hidden');
+                document.getElementById('otpStep').classList.remove('hidden');
+                loadUserData();
+            }
+        }
+
+        function verifyLoginOTP() {
+            const val = document.getElementById('otpInput').value.trim();
+            if(val === currentOtpTarget) {
+                db.currentUser = pendingUser;
+                saveDB();
+                completeLogin();
+            } else {
+                alert("Incorrect OTP code!");
+            }
+        }
+
+        function completeLogin() {
+            const deviceName = navigator.userAgent.includes("Mobile") ? "Prism Android App" : "Prism Web Browser";
+            if(!db.devices.includes(deviceName)) db.devices.push(deviceName);
+            saveDB();
+            
+            document.getElementById('authModal').classList.add('hidden');
+            loadUserData();
+        }
+
+        function loadUserData() {
+            if(!db.currentUser) return;
+            const seed = db.avatars[db.currentUser] || db.currentUser;
+            document.getElementById('userDP').src = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}`;
+            renderEmails();
+        }
+
+        function updateDP() {
+            const seed = document.getElementById('dpSeedInput').value.trim();
+            if(!seed) return alert("Enter seed name!");
+            db.avatars[db.currentUser] = seed;
+            saveDB();
+            loadUserData();
+            closeModal('dpModal');
+            alert("Profile DP Updated!");
+        }
+
+        async function sendMail() {
+            const recipient = document.getElementById('recipientUser').value.trim().toLowerCase();
+            const subject = document.getElementById('mailSubject').value.trim();
+            const body = document.getElementById('mailBody').value.trim();
+
+            if(!recipient || !subject || !body) return alert("Please fill all fields!");
+            
+            // Sync to Supabase Server Database
+            try {
+                const { error } = await _supabase
+                    .from('prism_mails')
+                    .insert([{ sender: db.currentUser, recipient: recipient, subject: subject, body: body }]);
+                
+                if(error) console.log("Server Sync Error:", error.message);
+            } catch(err) {
+                console.log("Network error", err);
+            }
+
+            if(!db.emails[recipient]) db.emails[recipient] = { inbox: [], sent: [] };
+            db.emails[recipient].inbox.unshift({
+                sender: db.currentUser,
+                subject: subject,
+                body: body
+            });
+
+            if(!db.emails[db.currentUser].sent) db.emails[db.currentUser].sent = [];
+            db.emails[db.currentUser].sent.unshift({
+                sender: "To: " + recipient,
+                subject: subject,
+                body: body
+            });
+
+            saveDB();
+            closeModal('composeModal');
+            alert("Mail sent successfully!");
+            renderEmails();
+        }
+
+        function saveDB() { localStorage.setItem('prism_mail_system', JSON.stringify(db)); }
+
+        function toggleMenu() { document.getElementById('menu').classList.toggle('hidden'); }
+
+        function switchTab(tab) {
+            activeTab = tab;
+            document.getElementById('viewTitle').innerText = tab.toUpperCase();
+            document.getElementById('menu').classList.add('hidden');
+            renderEmails();
+        }
+
+        function renderEmails() {
+            const list = document.getElementById('emailList');
+            if(!list || !db.currentUser) return;
+            list.innerHTML = '';
+            const userMailBox = db.emails[db.currentUser] || { inbox: [], sent: [] };
+            const items = userMailBox[activeTab] || [];
+            
+            if(items.length === 0) {
+                list.innerHTML = `<p class="text-center text-gray-500 text-xs py-10">No messages found</p>`;
+                return;
+            }
+            items.forEach((item, index) => {
+                list.innerHTML += `
+                    <div onclick="readEmail('${activeTab}', ${index})" class="glass rounded-2xl p-3 cursor-pointer hover:border-indigo-500 transition text-xs">
+                        <p class="font-bold text-white">${item.sender}</p>
+                        <p class="text-indigo-300 font-medium">${item.subject}</p>
+                        <p class="text-gray-400 truncate">${item.body}</p>
+                    </div>
+                `;
+            });
+        }
+
+        function searchMails() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const list = document.getElementById('emailList');
+            if(!db.currentUser) return;
+            const userMailBox = db.emails[db.currentUser] || { inbox: [], sent: [] };
+            const items = userMailBox[activeTab] || [];
+            
+            const filtered = items.filter(item => item.sender.toLowerCase().includes(query) || item.subject.toLowerCase().includes(query) || item.body.toLowerCase().includes(query));
+            
+            list.innerHTML = '';
+            if(filtered.length === 0) {
+                list.innerHTML = `<p class="text-center text-gray-500 text-xs py-10">No matching mails</p>`;
+                return;
+            }
+            filtered.forEach((item, index) => {
+                list.innerHTML += `
+                    <div onclick="readEmail('${activeTab}', ${index})" class="glass rounded-2xl p-3 cursor-pointer hover:border-indigo-500 transition text-xs">
+                        <p class="font-bold text-white">${item.sender}</p>
+                        <p class="text-indigo-300 font-medium">${item.subject}</p>
+                        <p class="text-gray-400 truncate">${item.body}</p>
+                    </div>
+                `;
+            });
+        }
+
+        function readEmail(tab, idx) {
+            const userMailBox = db.emails[db.currentUser];
+            const mail = userMailBox[tab][idx];
+            document.getElementById('readSender').innerText = "From: " + mail.sender;
+            document.getElementById('readSubject').innerText = mail.subject;
+            document.getElementById('readBody').innerText = mail.body;
+            document.getElementById('readModal').classList.remove('hidden');
+        }
+
+        function openModal(id) {
+            document.getElementById('menu').classList.add('hidden');
+            if(id === 'devicesModal') {
+                const dList = document.getElementById('deviceList');
+                dList.innerHTML = db.devices.map(d => `<div class="p-2 bg-gray-900 rounded-lg border border-gray-800">📱 ${d} (Active)</div>`).join('');
+            }
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function logout() {
+            db.currentUser = null;
+            saveDB();
+            location.reload();
+        }
+    </script>
+</body>
+      </html>
+              
